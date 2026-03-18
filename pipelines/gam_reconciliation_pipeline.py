@@ -6,10 +6,11 @@ logger = get_logger(__name__)
 
 def run(db: DBManager, run_date: str) -> None:
     """
-    Aggregate all events for run_date and insert them into the SSOT table.
+    Reconcile GAM revenue in the SSOT: update estimated CPM with actual
+    CPM from gam_data_transfer. Covers a 3-day lookback for late arrivals.
 
     Args:
         db:         Active DBManager instance.
         run_date:   Date to process (YYYY-MM-DD).
     """
-    db.execute_file("sql/pipelines/01_events_to_ssot.sql", {"run_date": run_date})
+    db.execute_file("sql/pipelines/02_gam_reconciliation.sql", {"run_date": run_date})

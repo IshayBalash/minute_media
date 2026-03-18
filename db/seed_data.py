@@ -82,6 +82,7 @@ LINE_ITEMS_MAPPING = [
 
 def seed(db: DBManager) -> None:
     """Create all tables, truncate existing data, and insert fresh sample data."""
+    logger.info("Creating tables if not exsist")
 
     # --- Schema ---
     schema_files = [
@@ -94,7 +95,7 @@ def seed(db: DBManager) -> None:
         "sql/schema/07_ssot.sql",
     ]
     for f in schema_files:
-        db.execute_sql_file(f)
+        db.execute_file(f)
 
     # --- Truncate all tables before inserting ---
     tables = [
@@ -106,11 +107,12 @@ def seed(db: DBManager) -> None:
         "line_items_mapping",
         "ssot",
     ]
+    logger.info("Truncating existing data from all tables.")
     for table in tables:
-        db.execute_sql_string(f"DELETE FROM {table}")
-    logger.info("All tables truncated.")
+        db.execute(f"DELETE FROM {table}")
 
     # --- events ---
+    logger.info("Inserting sample data to tables...")
     db.execute_many(
         """
         INSERT INTO events (
@@ -120,7 +122,6 @@ def seed(db: DBManager) -> None:
         """,
         EVENTS,
     )
-    logger.info(f"Inserted {len(EVENTS)} rows into events.")
 
     # --- ssp_report ---
     db.execute_many(
@@ -131,7 +132,6 @@ def seed(db: DBManager) -> None:
         """,
         SSP_REPORT,
     )
-    logger.info(f"Inserted {len(SSP_REPORT)} rows into ssp_report.")
 
     # --- gam_data_transfer ---
     db.execute_many(
@@ -142,7 +142,6 @@ def seed(db: DBManager) -> None:
         """,
         GAM_DATA_TRANSFER,
     )
-    logger.info(f"Inserted {len(GAM_DATA_TRANSFER)} rows into gam_data_transfer.")
 
     # --- demand_partner_reports ---
     db.execute_many(
@@ -153,7 +152,6 @@ def seed(db: DBManager) -> None:
         """,
         DEMAND_PARTNER_REPORTS,
     )
-    logger.info(f"Inserted {len(DEMAND_PARTNER_REPORTS)} rows into demand_partner_reports.")
 
     # --- syndication_revenue ---
     db.execute_many(
@@ -165,20 +163,18 @@ def seed(db: DBManager) -> None:
         """,
         SYNDICATION_REVENUE,
     )
-    logger.info(f"Inserted {len(SYNDICATION_REVENUE)} rows into syndication_revenue.")
 
     # --- line_items_mapping ---
     db.execute_many(
         "INSERT INTO line_items_mapping (line_item_id, advertiser) VALUES (?, ?)",
         LINE_ITEMS_MAPPING,
     )
-    logger.info(f"Inserted {len(LINE_ITEMS_MAPPING)} rows into line_items_mapping.")
 
     logger.info("Done. Database is ready.")
 
 
-if __name__ == "__main__":
-    db = DBManager()
-    db.connect()
-    seed(db)
-    db.disconnect()
+# if __name__ == "__main__":
+#     db = DBManager()
+#     db.connect()
+#     seed(db)
+#     db.disconnect()
