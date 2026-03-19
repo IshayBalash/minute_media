@@ -172,9 +172,3 @@ def seed(db: DBManager) -> None:
 
     logger.info("Done. Database is ready.")
 
-
-# if __name__ == "__main__":
-#     db = DBManager()
-#     db.connect()
-#     seed(db)
-#     db.disconnect()

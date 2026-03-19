@@ -47,16 +47,18 @@ class DBManager:
         path = Path(sql_file_path)
         if not path.exists():
             raise FileNotFoundError(f"SQL file not found: {sql_file_path}")
+        before = self.conn.total_changes
         self.conn.execute(path.read_text(), params)
         self.conn.commit()
-        logger.info(f"Executed: {path} — {self.conn.total_changes} rows affected")
+        logger.info(f"Executed: {path} — {self.conn.total_changes - before} rows affected")
 
     def execute(self, sql: str, params: dict = {}) -> sqlite3.Cursor:
         """Execute a single SQL string (INSERT, UPDATE, DELETE, or DDL)."""
         self._require_connection()
+        before = self.conn.total_changes
         curr = self.conn.execute(sql, params)
         self.conn.commit()
-        logger.info(f"Executed SQL — {self.conn.total_changes} rows affected")
+        logger.info(f"Executed SQL — {self.conn.total_changes - before} rows affected")
         return curr
 
     def execute_many(self, sql: str, data: list[tuple]) -> None:

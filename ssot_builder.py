@@ -20,7 +20,7 @@ Usage:
 from datetime import date
 from db.manager import DBManager
 from db.seed_data import seed
-from pipelines import events_pipeline, gam_reconciliation_pipeline
+from pipelines import events_pipeline, gam_reconciliation_pipeline, demand_partner_pipeline, ssp_pipeline, syndication_pipeline
 from utils.logger import get_logger, setup_logging
 
 setup_logging()
@@ -39,55 +39,85 @@ def run() -> None:
     seed(db)
 
     logger.info(f"\nStarting SSOT Builder for {RUN_DATE} at UTC hour {CURRENT_HOUR}.")
+    count_records=db.query("SELECT count(1) as cnt_records FROM ssot""").iloc[0]['cnt_records'] 
+    logger.info(f"SSOT record count: {count_records}")
+
+
 
     # --- Every hour: Step 1 clear run_date and rebuild from events ---
     logger.info("Clearing SSOT for run_date and inserting events.")
     db.execute("DELETE FROM ssot WHERE date = :run_date", {"run_date": RUN_DATE})
-    
+    count_records=db.query("SELECT count(1) as cnt_records FROM ssot""").iloc[0]['cnt_records'] 
+    logger.info(f"SSOT record count: {count_records}")
+
     
     ## --- Every hour: Step 2: Insert records from events table to SSOT table ---
     logger.info("Inserting records from events table to SSOT table.")
     events_pipeline.run(db, RUN_DATE)
+    count_records=db.query("SELECT count(1) as cnt_records FROM ssot""").iloc[0]['cnt_records'] 
+    logger.info(f"SSOT record count: {count_records}")
+
+    
 
 
+    
     ## --- step 3: update GEMA reconciliation data (actual CPM) in SSOT table ---
     if (CURRENT_HOUR == 16) or (1==1):
         logger.info("Updating GAM reconciliation data (actual CPM) in SSOT table.")
         gam_reconciliation_pipeline.run(db, RUN_DATE)
+        count_records=db.query("SELECT count(1) as cnt_records FROM ssot""").iloc[0]['cnt_records'] 
+        logger.info(f"SSOT record count: {count_records}")
+
+    
+
+    ## --- step 4: update demand partner reconciliation data in SSOT table ---
+    if (CURRENT_HOUR == 9) or (1==1):
+        logger.info("Updating demand partner reconciliation data in SSOT table.")
+        demand_partner_pipeline.run(db, RUN_DATE) 
+
+    
+    # --- 08:00 UTC: SSP external revenue (last 3 days) ---
+    if CURRENT_HOUR == 8 or (1==1):
+        logger.info("Inserting external SSP revenue into SSOT table.")
+        ssp_pipeline.run(db, RUN_DATE)
+
+    # --- 08:00 UTC: Syndication revenue (last 3 days) ---
+    if CURRENT_HOUR == 8 or (1==1):
+        logger.info("Inserting syndication revenue into SSOT table.")
+        syndication_pipeline.run(db, RUN_DATE)
+        count_records=db.query("SELECT count(1) as cnt_records FROM ssot""").iloc[0]['cnt_records'] 
+        logger.info(f"SSOT record count: {count_records}")
+
+
+
     
 
 
 
-    # # --- 08:00 UTC: SSP external revenue (last 3 days) ---
-    # if CURRENT_HOUR == 8:
-    #     logger.info("Step 2: SSP external revenue pipeline.")
-    #     # ssp_pipeline.run(db, RUN_DATE)  # TODO
-    # else:
-    #     logger.info("Step 2: Skipping SSP pipeline (runs at 08:00 UTC).")
-
-    # # --- 08:00 UTC: Syndication revenue (last 3 days) ---
-    # if CURRENT_HOUR == 8:
-    #     logger.info("Step 3: Syndication revenue pipeline.")
-    #     # syndication_pipeline.run(db, RUN_DATE)  # TODO
-    # else:
-    #     logger.info("Step 3: Skipping syndication pipeline (runs at 08:00 UTC).")
-
-    # # --- 16:00 UTC: GAM reconciliation (last 3 days) ---
-    # if CURRENT_HOUR == 16:
-    #     logger.info("Step 4: GAM reconciliation pipeline.")
-    #     gam_reconciliation_pipeline.run(db, RUN_DATE)
-    # else:
-    #     logger.info("Step 4: Skipping GAM reconciliation (runs at 16:00 UTC).")
-
-    # # --- Next day 09:00 UTC: Demand partner reconciliation (last 3 days) ---
-    # if is_next_day and CURRENT_HOUR == 9:
-    #     logger.info("Step 5: Demand partner reconciliation pipeline.")
-    #     # demand_partner_pipeline.run(db, RUN_DATE)  # TODO
-    # else:
-    #     logger.info("Step 5: Skipping demand partner reconciliation (runs next day at 09:00 UTC).")
 
     logger.info(f"Done for {RUN_DATE}.")
     db.disconnect()
 
 
 run()
+
+
+
+def test_run():
+    db = DBManager()
+    db.connect()
+    db.execute("drop table if exists ssot")
+    # query="""
+    #     SELECT
+    #      organization_id,
+    #      count(1) as cnt_records
+    #     from ssot
+    #     group by organization_id
+    #     """
+    # result = db.query(query)
+    # print(result.head(10))
+    db.disconnect()
+
+
+
+#test_run()

@@ -5,7 +5,7 @@
 
 CREATE TABLE IF NOT EXISTS ssot (
     date            TEXT    NOT NULL,   -- UTC date (YYYY-MM-DD)
-    rounded_hour    INTEGER NOT NULL,   -- 0–23
+    rounded_hour    INTEGER,            -- 0–23, NULL for daily sources (ssp_external, syndication)
     event           TEXT    NOT NULL,   -- served | pageView | videoEmbed | syndication | ssp_external
     organization_id TEXT    NOT NULL,
     adunit          TEXT,
