@@ -5,11 +5,11 @@
 -- NOTE (BigQuery): partition by report_date
 
 CREATE TABLE IF NOT EXISTS demand_partner_reports (
-    report_date     TEXT    NOT NULL,   -- UTC date (YYYY-MM-DD)
+    report_date     TEXT    NOT NULL, 
     partner_name    TEXT    NOT NULL,
-    property_code   TEXT    NOT NULL,   -- Maps to organization_id for O&O properties
-    ad_unit         TEXT,               -- Can be NULL (partner may not report at ad unit level)
-    geo             TEXT,               -- Geography code (e.g. us, gb, fr)
+    property_code   TEXT    NOT NULL,   
+    ad_unit         TEXT,              
+    geo             TEXT,             
     impressions     INTEGER NOT NULL DEFAULT 0,
     revenue_usd     REAL    NOT NULL DEFAULT 0.0
 );

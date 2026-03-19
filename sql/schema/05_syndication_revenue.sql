@@ -4,7 +4,7 @@
 -- NOTE (BigQuery): partition by transaction_date
 
 CREATE TABLE IF NOT EXISTS syndication_revenue (
-    transaction_date    TEXT    NOT NULL,   -- UTC date (YYYY-MM-DD)
+    transaction_date    TEXT    NOT NULL, 
     partner_name        TEXT    NOT NULL,
     content_property    TEXT    NOT NULL,
     article_count       INTEGER NOT NULL DEFAULT 0,

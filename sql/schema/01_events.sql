@@ -1,15 +1,11 @@
--- Source: first-party event-level raw data
--- Volume: billions of rows/day | Retention: last 60 days
--- NOTE (BigQuery): partition by DATE(timestamp), cluster by organization_id, event
-
 CREATE TABLE IF NOT EXISTS events (
-    timestamp       TEXT        NOT NULL,   -- UTC datetime (ISO 8601)
-    event           TEXT        NOT NULL,   -- pageView | served | videoEmbed
+    timestamp       TEXT        NOT NULL,   
+    event           TEXT        NOT NULL,   
     organization_id TEXT        NOT NULL,
     adunit          TEXT,
     media_type      TEXT,
     network         TEXT,
-    cpm             REAL        NOT NULL DEFAULT 0.0,  -- Estimated (except MinuteSSP = real)
+    cpm             REAL        NOT NULL DEFAULT 0.0,  
     sessionid       TEXT,
     url             TEXT,
     line_item       TEXT,
