@@ -13,7 +13,7 @@ Step schedule (all reconciliation steps cover the last 3 days):
     16:00 UTC   — GAM reconciliation (actual CPM, arrives ~4 PM)
     Next day 09:00 UTC — Demand partner reconciliation (O&O, arrives next day)
 
-Usage:
+How to run: 
     python3 ssot_builder.py
 """
 
