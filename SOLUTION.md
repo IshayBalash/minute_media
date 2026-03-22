@@ -2,9 +2,10 @@
 
 ## Overview
 
-This project builds a **Revenue Single Source of Truth (SSOT)** for Minute Media by consolidating all revenue streams into a single, granular, daily-refreshed table. The pipeline runs hourly, pulling from five source tables and applying a layered reconciliation strategy to produce accurate, adjusted revenue figures.
+This project builds a **Revenue Single Source of Truth (SSOT)** by consolidating all revenue streams into a single, granular, daily-refreshed table. The pipeline runs hourly, pulling from five source tables 
+to produce accurate, adjusted revenue figures.
 
-The implementation uses **SQLite** locally (for development/demo) and is designed to run on **BigQuery** in production. All SQL files include BigQuery migration notes.
+The implementation uses **SQLite** locally (for development/demo) and can be easy ajusted to other SQL engines.
 
 ---
 
@@ -39,8 +40,8 @@ python3 ssot_builder.py
 │   ├── syndication_pipeline.py  # Step 4: Syndication revenue
 │   └── demand_partner_pipeline.py       # Step 5: Prebid O&O reconciliation
 ├── sql/
-│   ├── schema/                  # CREATE TABLE definitions (01–07)
-│   └── pipelines/               # Pipeline SQL queries (01–05)
+│   ├── schema/                  # CREATE TABLE definitions 
+│   └── pipelines/               # Pipeline SQL queries 
 └── utils/
     └── logger.py                # Logging setup
 ```
@@ -50,34 +51,39 @@ python3 ssot_builder.py
 ## Pipeline Architecture
 
 ```
-Every hour (all sources use 3-day lookback for reconciliation steps)
-│
 ├── [Every hour]
-│   ├── DELETE ssot WHERE date = run_date
-│   └── 01_events_to_ssot.sql ──────────────── INSERT from events (estimated CPM)
+│   ├── DELETE ssot WHERE date = run_date AND rounded_hour IN (current, current-1)
+│   └── 01_events_to_ssot.sql ──────────────────── INSERT last 2 hours from events (estimated CPM)
 │
-├── [08:00 UTC]
-│   ├── 04_ssp_to_ssot.sql ─────────────────── INSERT SSP external rows
-│   └── 05_syndication_to_ssot.sql ─────────── INSERT syndication rows
+├── [08:00–09:00 UTC]
+│   ├── DELETE ssp_external rows (3-day window)
+│   ├── 04_ssp_to_ssot.sql ─────────────────────── INSERT SSP external rows
+│   ├── DELETE syndication rows (3-day window)
+│   └── 05_syndication_to_ssot.sql ─────────────── INSERT syndication rows
 │
-├── [16:00 UTC]
-│   └── 02_gam_reconciliation.sql ──────────── UPDATE GAM rows → actual CPM
+├── [16:00–17:00 UTC]
+│   └── 02_gam_reconciliation.sql ──────────────── UPDATE existing GAM rows → actual CPM
 │
-└── [Next day 09:00 UTC]
-    └── 03_demand_partner_reconciliation.sql ── UPDATE Prebid O&O rows → actual revenue
+└── [09:00–10:00 UTC]
+    └── 03_demand_partner_reconciliation.sql ────── UPDATE existing Prebid O&O rows → actual revenue
 ```
 
 ### Why this schedule?
 
-| Source | Arrives | Step runs |
-|---|---|---|
-| `events` | Streaming (continuous) | Every hour |
-| `ssp_report` | 8 AM UTC | 08:00 UTC |
-| `syndication_revenue` | 8 AM UTC | 08:00 UTC |
-| `gam_data_transfer` | ~4 PM UTC (within 8h) | 16:00 UTC |
-| `demand_partner_reports` | 9 AM UTC next day | Next day 09:00 UTC |
+| Source | Arrives | Step runs | Operation |
+|---|---|---|---|
+| `events` | Streaming (continuous) | Every hour (last 2 hours) | DELETE + INSERT |
+| `ssp_report` | 8 AM UTC | 08:00–09:00 UTC | DELETE + INSERT |
+| `syndication_revenue` | 8 AM UTC | 08:00–09:00 UTC | DELETE + INSERT |
+| `gam_data_transfer` | ~4 PM UTC (within 8h) | 16:00–17:00 UTC | UPDATE only |
+| `demand_partner_reports` | 9 AM UTC (late arriving) | 09:00–10:00 UTC | UPDATE only |
 
-**Idempotency:** Each run deletes and rebuilds only the `run_date` slice from events. Reconciliation steps operate on a **3-day lookback window** to catch late-arriving data without re-running from scratch.
+**Why 2-hour windows?** The events pipeline deletes and re-inserts the last 2 hours each run to handle late-arriving events. Reconciliation steps (GAM, demand partners) also run in 2-hour windows so they can re-apply actual revenue to any rows that were just re-inserted by the events pipeline.
+
+**Idempotency:**
+- The events pipeline only clears the last 2 hours — previously reconciled hours are never touched.
+- SSP and syndication pipelines delete their specific event types (`ssp_external`, `syndication`) for the 3-day window before re-inserting, so they are safe to re-run.
+- GAM and demand partner steps only UPDATE existing rows — no rows are deleted. They rely on the events pipeline having already inserted the base rows.
 
 ---
 
@@ -85,10 +91,10 @@ Every hour (all sources use 3-day lookback for reconciliation steps)
 
 ### Step 1 — Events → SSOT (`01_events_to_ssot.sql`)
 
-**Runs:** Every hour
+**Runs:** Every hour (last 2 hours only)
 **Type:** DELETE + INSERT
 
-Aggregates all raw events for `run_date` and inserts them into the SSOT at hourly grain (date + hour + all dimension columns).
+Deletes the current and previous hour from SSOT, then re-aggregates and inserts events for those 2 hours. This preserves reconciled data for earlier hours while handling late-arriving events.
 
 **Logic:**
 - Groups by all SSOT dimension columns
@@ -148,12 +154,6 @@ Inserts SSP revenue for publisher/player inventory that is **not tracked in the 
 | `rounded_hour` | `NULL` | Daily data — no hourly breakdown available |
 | `adunit`, `domain`, etc. | `NULL` | Not available in SSP report |
 
-**Assumptions:**
-- SSP report revenue is already the true total (not estimated) — no further reconciliation needed
-- `own_site` / `own_player` rows in `ssp_report` have identical revenue to the corresponding `events` rows; events is treated as authoritative for those
-- Country code format in `ssp_report` (ISO alpha-3, e.g. `USA`) is preserved as-is
-
----
 
 ### Step 4 — Syndication Revenue (`05_syndication_to_ssot.sql`)
 
@@ -176,7 +176,6 @@ Inserts content syndication revenue from third-party partners (Yahoo Sports, MSN
 **Assumptions:**
 - Syndication revenue is flat/fixed per period — no CPM reconciliation needed
 - `total_revenue = flat_fee + revenue_share` is the authoritative figure
-- No country-level breakdown is available from syndication partners
 
 ---
 
@@ -198,8 +197,7 @@ Updates estimated Prebid revenue for O&O properties using actual revenue from de
 - O&O scope is enforced by the JOIN to `demand_partner_reports` — publishers not in that table are naturally excluded
 - `paying_entity` in events maps directly to `partner_name` in demand partner reports
 - Within a given SSOT grain group, `paying_entity` is consistent; `MAX(paying_entity)` handles any edge-case variance
-- Revenue is distributed proportionally by impression count — this is the standard approach when partner reports don't provide sub-property breakdown
-- `demand_partner_reports.geo` uses lowercase country codes (e.g. `us`, `gb`) → matched with `LOWER(ssot.country)`
+- Revenue is distributed proportionally by impression count 
 - GAM and MinuteSSP rows are excluded — they are reconciled by dedicated pipelines
 
 ---
@@ -226,9 +224,3 @@ Updates estimated Prebid revenue for O&O properties using actual revenue from de
 
 ---
 
-## General Assumptions
-
-- All timestamps and dates are **UTC**
-- The `events` table retains only the last 60 days; the SSOT retains full history
-- Re-running the full pipeline for a date is safe (idempotent) — `run_date` is cleared and rebuilt each run
-- Reconciliation steps use a **3-day lookback** to handle late-arriving source data without a full historical reprocess

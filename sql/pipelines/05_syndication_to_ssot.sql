@@ -1,6 +1,5 @@
 -- Pipeline: Syndication revenue → SSOT
 -- Inserts content syndication revenue from third-party partners (Yahoo Sports, MSN, etc.)
--- This revenue stream is NOT tracked in the events table.
 --
 -- Field mapping:
 --   organization_id = content_property
@@ -13,7 +12,6 @@
 -- Parameters:
 --   :run_date  — date to process (YYYY-MM-DD). Covers run_date − 3 days to run_date.
 --
--- NOTE (BigQuery): Replace DATE(..., '-3 days') with DATE_SUB(:run_date, INTERVAL 3 DAY)
 
 WITH syndication_data AS (
     SELECT

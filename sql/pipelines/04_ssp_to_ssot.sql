@@ -17,7 +17,6 @@
 -- Parameters:
 --   :run_date  — date to process (YYYY-MM-DD). Covers run_date − 3 days to run_date.
 --
--- NOTE (BigQuery): Replace DATE(..., '-3 days') with DATE_SUB(:run_date, INTERVAL 3 DAY)
 
 WITH ssp_external AS (
     SELECT
